@@ -11,8 +11,8 @@
       "appKey": { "type": "string", "title": "App Key" },
       "appSecret": { "type": "string", "title": "App Secret" },
       "guid": { "type": "string", "title": "机器人 GUID" },
-      "baseUrl": { "type": "string", "format": "uri", "title": "API 基础 URL" },
-      "wsUrl": { "type": "string", "format": "uri", "title": "WebSocket URL" },
+      "baseUrl": { "type": "string", "title": "API 基础 URL" },
+      "wsUrl": { "type": "string", "title": "WebSocket URL" },
       "accountId": { "type": "string", "description": "从 accounts.json 加载的账号 ID" },
       "contacts": {
         "type": "array",

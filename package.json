@@ -1,9 +1,23 @@
 {
-  "name": "openclaw-juhe",
-  "version": "1.0.0",
-  "description": "OpenClaw channel plugin for aggregate_chat (WeChat/WeWork integration)",
+  "name": "juhe",
+  "version": "2026.3.26",
+  "description": "建立微信和企业微信聊天通道",
   "type": "module",
   "main": "index.ts",
+  "openclaw": {
+    "extensions": [
+     "./index.ts"
+   ],
+   "channel": {
+      "id": "juhe",
+      "label": "juhe",
+      "selectionLabel": "juhe",
+      "docsPath": "/channels/juhe",
+      "docsLabel": "juhe",
+      "blurb": "Juhe channel integration",
+      "order": 76
+    }
+  },
   "scripts": {
     "test-ws": "node test-ws.mjs",
     "type-check": "tsc --noEmit"
