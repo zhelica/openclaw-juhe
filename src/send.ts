@@ -9,15 +9,17 @@ import { createJuheClient } from "./client.js";
 import type { JuheMessageType } from "./types.js";
 
 /**
- * 发送文本消息到 Juhe
+ * 发送文本消息到 Juhe（使用新版 API）
  */
 export async function sendMessageJuhe(params: {
   cfg: ClawdbotConfig;
   to: string;
   text: string;
   accountId?: string;
+  recipientName?: string;
+  atUserName?: string | null;
 }): Promise<void> {
-  const { cfg, to, text, accountId } = params;
+  const { cfg, to, text, accountId, recipientName, atUserName } = params;
 
   const account = resolveJuheAccount({ cfg, accountId });
   if (!account.configured) {
@@ -28,6 +30,17 @@ export async function sendMessageJuhe(params: {
   console.log(`juhe send: accountId=${accountId}, account.guid=${account.guid}, account.config.guid=${account.config?.guid}`);
 
   const client = createJuheClient(account.config);
+
+  // 如果提供了 recipientName，使用新版 API
+  if (recipientName) {
+    const result = await client.sendTextNew(recipientName, text, atUserName ?? null);
+    if (result.err_code !== 0) {
+      throw new Error(`Juhe send failed: ${result.err_msg || result.err_code}`);
+    }
+    return;
+  }
+
+  // 否则使用旧版 API
   const result = await client.sendText(to, text);
 
   if (result.err_code !== 0) {

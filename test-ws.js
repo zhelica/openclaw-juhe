@@ -6,10 +6,10 @@
 const WebSocket = require('ws');
 
 const config = {
-  wsUrl: 'wss://dev-chat-admin.juhebot.com/ws/juwe',
+  wsUrl: 'ws://127.0.0.1:8002',
   appKey: '123',
-  appSecret: '456',
-  guid: 'fbaeeed9-71b4-362a-af79-1950573d4fcc'
+  appSecret: '123',
+  guid: '123'
 };
 
 console.log(`连接到: ${config.wsUrl}`);

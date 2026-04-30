@@ -43,13 +43,15 @@ export type CreateJuheReplyDispatcherParams = {
   accountId?: string;
   /** 是否为群消息（用于正确格式化企微 conversation_id） */
   isGroup?: boolean;
+  /** 群昵称或发送者昵称（用于新版 API） */
+  recipientName?: string;
 };
 
 /**
  * 创建 Juhe Reply Dispatcher
  */
 export function createJuheReplyDispatcher(params: CreateJuheReplyDispatcherParams) {
-  const { cfg, agentId, target, accountId, runtime, isGroup = false } = params;
+  const { cfg, agentId, target, accountId, runtime, isGroup = false, recipientName } = params;
   const core = getJuheRuntime();
   const account = resolveJuheAccount({ cfg, accountId });
 
@@ -119,6 +121,7 @@ export function createJuheReplyDispatcher(params: CreateJuheReplyDispatcherParam
             to: formattedTarget,
             text: textContent,
             accountId,
+            recipientName,
           });
 
           log(`juhe reply-dispatcher: reply sent successfully`);

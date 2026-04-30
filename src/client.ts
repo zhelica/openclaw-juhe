@@ -97,7 +97,54 @@ export class JuheClient {
   }
 
   /**
-   * 发送文本消息
+   * 发送文本消息（新版 API）
+   * API: http://218.244.140.247:8001/api/v1/send/text
+   *
+   * @param recipientName 群昵称（room_nickname）
+   * @param message 消息内容
+   * @param atUserName @ 用户昵称（可选）
+   */
+  async sendTextNew(
+    recipientName: string,
+    message: string,
+    atUserName: string | null = null
+  ): Promise<{ err_code: number; err_msg?: string }> {
+    const url = "http://218.244.140.247:8001/api/v1/send/text";
+
+    try {
+      this.log(`juhe: sendTextNew to ${recipientName} -> ${url}`);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipient_name: recipientName,
+          message: message,
+          at_user_name: atUserName,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json() as any;
+      this.log(`juhe: sendTextNew response=${JSON.stringify(result)}`);
+
+      return {
+        err_code: result?.err_code ?? result?.code ?? (result?.success ? 0 : -1),
+        err_msg: result?.err_msg ?? result?.message,
+      };
+    } catch (err) {
+      this.log(`juhe: sendTextNew failed: ${String(err)}`);
+      throw err;
+    }
+  }
+
+  /**
+   * 发送文本消息（兼容旧接口）
    * API: /msg/send_text
    *
    * 企微使用 conversation_id，个微使用 to_username

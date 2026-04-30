@@ -149,9 +149,21 @@ export const enum JuheCallbackEventType {
 
 /** 回调事件 */
 export interface JuheCallbackEvent {
-  guid: string;
-  notify_type: JuheCallbackEventType;
+  guid?: string;
+  notify_type?: JuheCallbackEventType | number;
   data?: any;
+  // 新格式字段（服务端直接发送的消息）
+  msg_type?: number;
+  msg_id?: string;
+  room_id?: string;
+  room_nickname?: string;
+  contact_nickname?: string;
+  self_nickname?: string;
+  chat_history?: string;
+  time_now?: string;
+  server_id?: string;
+  content?: string;
+  sender_id?: string;
 }
 
 /** 消息内容 */

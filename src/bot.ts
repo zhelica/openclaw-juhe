@@ -127,13 +127,15 @@ export async function handleJuheMessage(params: {
   const account = resolveJuheAccount({ cfg, accountId });
 
   // 解析消息数据
-  const msgData = event.data;
+  // 回调消息：字段在 event.data 中
+  // 广播消息（openai_bot_plugin）：字段直接在 event 顶层
+  const msgData = event.data ?? event;
 
   // 调试：输出完整的消息数据
   log(`juhe: raw msgData: ${JSON.stringify(msgData)}`);
 
-  // 提取消息 ID
-  const messageId = msgData?.msg_id || msgData?.msgid || `${Date.now()}_${Math.random()}`;
+  // 提取消息 ID（优先使用 server_id）
+  const messageId = msgData?.server_id || msgData?.msg_id || msgData?.msgid || `${Date.now()}_${Math.random()}`;
 
   // 去重检查
   if (!tryRecordMessage(messageId)) {
@@ -141,29 +143,27 @@ export async function handleJuheMessage(params: {
     return;
   }
 
-  // 解析消息内容
+  // 解析消息内容（新格式直接使用 content）
   const messageType = msgData?.msg_type || 1;
-  const rawContent = msgData?.content || msgData?.msg || "";
-  const content = parseMessageContent(rawContent, messageType);
+  const content = msgData?.content || "";
 
   // 解析发送者
-  // 企微: sender, sender_id, wxid, from_user.id
-  // 个微私聊: from_username
-  // 个微群聊: chatroom_sender
-  const actualSender = msgData?.chatroom_sender || "";
-  const senderId = actualSender || msgData?.from_username || msgData?.sender || msgData?.sender_id || msgData?.wxid || msgData?.from_user?.id || "";
-  const senderName = msgData?.sender_name || msgData?.from_user?.name || senderId;
-
-  // 解析接收者（用于回复）
-  const receiverId = msgData?.receiver || msgData?.receiver_id || "";
+  // 新格式：优先使用 sender_id，contact_nickname 作为昵称
+  const senderId = msgData?.sender_id || msgData?.contact_nickname || "";
+  const senderName = msgData?.contact_nickname || senderId;
 
   // 解析聊天对象
-  // API 返回 roomid (无下划线) 和 chat_id，同时支持两种格式
-  // 个微群使用 chatroom 字段
-  const roomId = msgData?.chat_id || msgData?.room_id || msgData?.roomid || msgData?.chatroom || "";
-  // 企微: is_group, 个微: is_chatroom_msg, 或通过 ID 格式判断
-  const isGroupMsg = msgData?.is_group || msgData?.is_chatroom_msg || isGroupId(roomId);
-  const chatId = roomId || (isGroupMsg ? senderId : "");
+  // 新格式：room_id 存在则为群聊，为空则为私聊
+  const roomId = msgData?.room_id || "";
+  const isGroupMsg = !!roomId;
+  const chatId = roomId || senderId;
+
+  // 群额外信息
+  const roomName = msgData?.room_nickname || "";
+  const selfNickname = msgData?.self_nickname || "";
+
+  // 解析时间戳
+  const timestamp = msgData?.time_now ? new Date(msgData.time_now).getTime() : Date.now();
 
   // 构建消息上下文
   const ctx: JuheMessageContext = {
@@ -176,7 +176,7 @@ export async function handleJuheMessage(params: {
     content,
     contentType: messageType as JuheMessageType,
     isGroup: isGroupMsg,
-    timestamp: msgData?.timestamp || Date.now(),
+    timestamp,
   };
 
   log(`juhe: received message from ${senderName} (${senderId}) in ${ctx.chatType} ${chatId || "DM"}`);
@@ -202,31 +202,12 @@ export async function handleJuheMessage(params: {
 
     // 检查是否需要 @ 机器人
     if (doesRoomRequireMention(chatId, account.rooms)) {
-      // 机器人 ID：个微使用 to_username（机器人自己的微信ID），企微使用 uin
-      // 注意：群聊消息中 receiver 为 "0"，不能用作 botId
-      // 企微：使用 at_list 中的第一个元素作为 botId（用户 @ 的人就是机器人）
-      let atList: string[] = msgData?.at_list || [];
-      let botId = msgData?.to_username || account.uin || account.config?.contacts?.[0] || "";
-      if (account.type === "wework" && atList.length > 0) {
-        botId = atList[0];
-      }
-      log(`juhe: mention check - account.type=${account.type}, account.uin="${account.uin}", botId="${botId}", at_list=${JSON.stringify(atList)}`);
-      // 个微的 @ 信息在 source 字段的 atuserlist 中，企微使用 at_list 数组
-
-      // 解析个微的 atuserlist（如果有）
-      if (atList.length === 0 && msgData?.source) {
-        const atUserListMatch = msgData.source.match(/<atuserlist><!\[CDATA\[(.*?)\]\]><\/atuserlist>/);
-        if (atUserListMatch && atUserListMatch[1]) {
-          // atuserlist 可能包含多个 ID，用逗号分隔
-          atList = atUserListMatch[1].split(',').filter((id: string) => id);
-        }
-      }
-
-      // 检查机器人是否被 @
-      const isBotMentioned = atList.includes(botId);
+      // 新格式使用 self_nickname 匹配来判断是否被 @
+      // 如果消息内容中包含自己的昵称，说明被 @
+      const isBotMentioned = content.includes(selfNickname);
 
       if (!isBotMentioned) {
-        log(`juhe: ignoring message from room ${chatId} - bot not mentioned (at_list: ${JSON.stringify(atList)}, botId: ${botId})`);
+        log(`juhe: ignoring message from room ${chatId} - bot not mentioned (self_nickname: ${selfNickname})`);
         return;
       }
 
@@ -310,6 +291,8 @@ export async function handleJuheMessage(params: {
       accountId: account.accountId,
       // 传递消息类型用于正确格式化 conversation_id
       isGroup: isGroupMsg,
+      // 群昵称或发送者昵称（用于新版 API）
+      recipientName: isGroupMsg ? roomName : senderName,
     });
 
     // 分发到代理
@@ -340,19 +323,20 @@ export async function handleJuheMessage(params: {
       }
     }
     log(`juhe: built replyTarget="${replyTarget}"`);
-    try {
-      const thinkingMessage = getRandomThinkingMessage();
-      await sendMessageJuhe({
-        cfg,
-        to: replyTarget,
-        text: thinkingMessage,
-        accountId: account.accountId,
-      });
-      log(`juhe: thinking message sent to ${replyTarget}`);
-    } catch (err) {
-      // 思考中消息发送失败不影响主流程
-      log(`juhe: failed to send thinking message: ${String(err)}`);
-    }
+    // try {
+    //   const thinkingMessage = getRandomThinkingMessage();
+    //   await sendMessageJuhe({
+    //     cfg,
+    //     to: replyTarget,
+    //     text: thinkingMessage,
+    //     accountId: account.accountId,
+    //     recipientName: isGroupMsg ? roomName : senderName,
+    //   });
+    //   log(`juhe: thinking message sent to ${replyTarget}`);
+    // } catch (err) {
+    //   // 思考中消息发送失败不影响主流程
+    //   log(`juhe: failed to send thinking message: ${String(err)}`);
+    // }
 
     const { queuedFinal, counts } = await core.channel.reply.dispatchReplyFromConfig({
       ctx: ctxPayload,

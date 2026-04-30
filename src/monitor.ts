@@ -89,10 +89,12 @@ async function startWebSocketClient(params: {
             if (data.type === "auth_success") {
               log(`juhe[${accountId}]: authentication success`);
             } else if (data.type === "callback") {
-              // 处理回调事件
+              // 处理回调事件（服务端包装了 type: callback）
+              // 注意：guid 在 data 顶层，不在 data.event 中，需要传递完整 data
+              const eventId = data.event_id;
               const result = await handleJuheCallback({
                 cfg,
-                body: data.event,
+                body: data.event,  // 传递完整 data 以包含 guid
                 accountId,
                 runtime,
               });
@@ -102,13 +104,33 @@ async function startWebSocketClient(params: {
               }
 
               // 发送确认
-              ws?.send(JSON.stringify({
-                type: "ack",
-                event_id: data.event_id,
-                success: result.success,
-              }));
+              if (eventId) {
+                ws?.send(JSON.stringify({
+                  type: "ack",
+                  event_id: eventId,
+                  success: result.success,
+                }));
+              }
+            } else if (data.msg_type !== undefined || (data.event && data.event.msg_type !== undefined)) {
+              // 服务端直接广播的消息（不带 type: callback 包装）
+              // 例如 openai_bot_plugin 发送的消息
+              // msg_type 可能在顶层（data.msg_type），也可能在 event 对象内（data.event.msg_type）
+              const msgType = data.msg_type ?? data.event?.msg_type;
+              log(`juhe[${accountId}]: received broadcast message, msg_type=${msgType}`);
+              const result = await handleJuheCallback({
+                cfg,
+                body: data,
+                accountId,
+                runtime,
+              });
+
+              if (!result.success) {
+                error(`juhe[${accountId}]: callback handling failed: ${result.error}`);
+              }
             } else if (data.type === "error") {
               error(`juhe[${accountId}]: server error: ${data.message}`);
+            } else {
+              log(`juhe[${accountId}]: received unknown message type: ${data.type || 'undefined'}`);
             }
           } catch (err) {
             error(`juhe[${accountId}]: message handling failed: ${String(err)}`);

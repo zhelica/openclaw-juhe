@@ -44,8 +44,8 @@ export { juhePlugin } from "./src/channel.js";
 const plugin = {
   id: "juhe",
   name: "Juhe (聚合聊天)",
-  description: "OpenClaw channel plugin for aggregate_chat (WeChat/WeWork integration)",
-  version: "1.0.0",
+  description: "建立微信和企业微信聊天通道",
+  version: "2026.3.26",
   register(api: OpenClawPluginApi) {
     // 设置 Runtime
     setJuheRuntime(api.runtime);
